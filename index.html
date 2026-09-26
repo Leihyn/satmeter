@@ -20,20 +20,25 @@
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);padding:0 20px;
-    font:15px/1.62 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif}
-  .wrap{max-width:940px;margin:0 auto;padding-block:44px 80px}
-  header{border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:24px}
+    font:14px/1.66 ui-monospace,Menlo,Consolas,monospace}
+  .wrap{max-width:1120px;margin:0 auto;padding-block:44px 80px}
+  header{border-bottom:1px dashed var(--line);padding-bottom:14px;margin-bottom:18px}
+  header::after{content:"session opened · nothing here leaves the tab";display:block;
+    margin-top:8px;font-size:12px;color:var(--mut)}
   h1{font-size:30px;margin:0 0 5px;letter-spacing:-.02em}
   h1 span{color:var(--volt)}
   .sub{color:var(--mut);margin:0}
-  h2{font-size:11.5px;text-transform:uppercase;letter-spacing:.14em;color:var(--mut);
-     margin:34px 0 10px;font-family:ui-monospace,Menlo,monospace}
+  h2{font-size:14px;text-transform:none;letter-spacing:0;color:var(--ink);
+     margin:30px 0 8px;font-weight:600}
   h2 b{color:var(--volt);font-weight:700}
+  h2::before{content:"satmeter ~ $ ";color:var(--mut);font-weight:400}
+  h2.plain::before{content:"# ";color:var(--mut)}
   p{margin:0 0 12px}
-  .lede{font-size:17px}
+  .lede{font-size:15px;color:#c3cbd8;border-left:2px solid var(--volt);padding-left:16px}
   .note{color:var(--mut);font-size:13px}
   code,.m{font-family:ui-monospace,Menlo,monospace;font-size:12.5px}
-  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:12px}
+  .panel{background:transparent;border:0;border-left:2px solid var(--line);
+    border-radius:0;padding:4px 0 18px 20px;margin:0 0 4px}
   button{font:inherit;font-size:14px;padding:9px 16px;border-radius:6px;cursor:pointer;
     background:var(--volt);color:#141200;border:none;font-weight:700}
   button:hover{filter:brightness(1.08)}
@@ -90,7 +95,7 @@
   about simulating that step rather than pretending otherwise.
 </p>
 
-<h2><b>1</b> · Ask for something you have not paid for</h2>
+<h2>curl /v1/quote</h2>
 <p class="note">
   The server answers 402 and hands back two things: an invoice to pay, and a credential that is
   useless until you do.
@@ -100,7 +105,7 @@
   <div id="askOut"></div>
 </div>
 
-<h2><b>2</b> · Pay, and the preimage becomes the key</h2>
+<h2>pay --invoice lntb… &amp;&amp; curl -H "Authorization: L402 …"</h2>
 <p class="note">
   Paying a Lightning invoice reveals its preimage, and only paying does. The preimage hashes to
   the payment hash written into the credential, so presenting both proves payment without the
@@ -111,7 +116,7 @@
   <div id="payOut"></div>
 </div>
 
-<h2><b>3</b> · Spend the meter</h2>
+<h2>curl /v1/quote  # repeatedly</h2>
 <p class="note">
   The credential says what it permits. The server checks the chain, checks the caveats, and
   serves. It holds one counter keyed by the payment hash and nothing else, so there is no account
@@ -123,7 +128,7 @@
   <div id="callOut"></div>
 </div>
 
-<h2><b>4</b> · Hand it on, weakened</h2>
+<h2>attenuate --calls 3 | send-to subcontractor</h2>
 <p class="note">
   Anyone holding a credential can narrow it and pass the narrowed copy to someone else, with no
   help from the server. Below, a subcontractor is given a copy capped far lower than yours. Then
@@ -138,13 +143,13 @@
   <div id="delOut"></div>
 </div>
 
-<h2>What is actually being trusted</h2>
+<h2 class="plain">What the server knows about you</h2>
 <p>
-  The server's root key, to be kept secret, and Lightning to deliver the preimage only on
-  payment. Nothing else. There is no account to breach, because there is no account. The server
-  cannot tell two customers apart except by payment hash, and it never sees a name, an email or a
-  card. A credential you delegate cannot be widened back by the person you gave it to, so you can
-  hand work to a subcontractor without handing over your balance.
+  One integer, keyed by a payment hash: how many calls have been made against it. No name, no
+  email, no card, no address, and no account to breach because there is no account. Two
+  purchases by the same person look like two strangers unless they choose to reuse a credential.
+  What has to hold is narrow: the root key stays secret, and Lightning reveals the preimage only
+  on payment.
 </p>
 <p class="note" id="scope">
   Implemented: macaroon minting, attenuation and verification over an HMAC-SHA256 chain; caveat
@@ -157,7 +162,7 @@
 
 <footer>
   <p><a href="https://github.com/Leihyn/satmeter">Source</a> · <a href="https://x.com/faruukku">@faruukku</a></p>
-  <p class="note">Demonstration keys, generated in your browser. Nothing is transmitted anywhere.</p>
+  <p class="note">Every credential on this page was minted here and dies with the tab.</p>
 </footer>
 
 </div>
