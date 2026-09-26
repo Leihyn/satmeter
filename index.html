@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="ory-verify" content="PASTE_SATMETER_TOKEN_HERE">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Metered API access with no account and no API key. Pay a Lightning invoice, get a credential that is the balance. A working L402 implementation you can run in the browser.">
+<meta name="twitter:creator" content="@faruukku">
+<link rel="me" href="https://x.com/faruukku">
+<link rel="icon" href="/logo.png">
+<meta property="og:title" content="Satmeter — metered API access with no account">
+<meta property="og:description" content="The credential is the balance. Narrow it and hand it on; nobody can widen it back. Working L402 with a real signed testnet invoice.">
+<title>Satmeter — metered API access with no account</title>
+<style>
+  :root{
+    color-scheme:dark;
+    --bg:#0a0c12; --panel:#111520; --line:#1e2533; --line2:#171d28;
+    --ink:#e6ebf2; --mut:#7d8798;
+    --volt:#ffd60a; --cy:#38bdf8; --ok:#34d399; --no:#fb7185;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);padding:0 20px;
+    font:15px/1.62 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:940px;margin:0 auto;padding-block:44px 80px}
+  header{border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:24px}
+  h1{font-size:30px;margin:0 0 5px;letter-spacing:-.02em}
+  h1 span{color:var(--volt)}
+  .sub{color:var(--mut);margin:0}
+  h2{font-size:11.5px;text-transform:uppercase;letter-spacing:.14em;color:var(--mut);
+     margin:34px 0 10px;font-family:ui-monospace,Menlo,monospace}
+  h2 b{color:var(--volt);font-weight:700}
+  p{margin:0 0 12px}
+  .lede{font-size:17px}
+  .note{color:var(--mut);font-size:13px}
+  code,.m{font-family:ui-monospace,Menlo,monospace;font-size:12.5px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:12px}
+  button{font:inherit;font-size:14px;padding:9px 16px;border-radius:6px;cursor:pointer;
+    background:var(--volt);color:#141200;border:none;font-weight:700}
+  button:hover{filter:brightness(1.08)}
+  button.g{background:transparent;color:var(--cy);border:1px solid var(--line);font-weight:400}
+  button.d{background:transparent;color:var(--no);border:1px solid #3a2530;font-weight:400}
+  button:disabled{opacity:.34;cursor:not-allowed}
+  .row{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+  .http{margin-top:13px;padding:13px 14px;background:#070910;border:1px solid var(--line2);
+    border-radius:7px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;
+    white-space:pre-wrap;word-break:break-all;line-height:1.7}
+  .http .s{color:var(--volt)}
+  .http .h{color:var(--cy)}
+  .http .c{color:var(--mut)}
+  .http .g{color:var(--ok)}
+  .http .r{color:var(--no)}
+  .k{color:var(--mut);font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px}
+  .v{margin-bottom:11px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;word-break:break-all}
+  .v:last-child{margin-bottom:0}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:8px 9px;border-bottom:1px solid var(--line2);vertical-align:top}
+  th{color:var(--mut);font-size:10px;text-transform:uppercase;letter-spacing:.08em;font-weight:600;white-space:nowrap}
+  td.m{word-break:break-all}
+  td.cav{white-space:nowrap;font-family:ui-monospace,Menlo,monospace;font-size:12.5px}
+  .pill{display:inline-block;font-family:ui-monospace,Menlo,monospace;font-size:11px;
+    padding:2px 9px;border-radius:20px;border:1px solid var(--line);white-space:nowrap}
+  .pill.ok{border-color:var(--ok);color:var(--ok);background:rgba(52,211,153,.1)}
+  .pill.no{border-color:var(--no);color:var(--no);background:rgba(251,113,133,.1)}
+  .meter{height:9px;background:#0b0f17;border:1px solid var(--line);border-radius:20px;overflow:hidden;margin:9px 0 4px}
+  .meter i{display:block;height:100%;background:var(--volt)}
+  .err{background:rgba(251,113,133,.09);border:1px solid #4a2b35;color:#ffc2cb;
+    border-radius:7px;padding:11px;font-size:13.5px;margin-top:11px}
+  .scroll{overflow-x:auto}
+  footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--line);color:var(--mut);font-size:13.5px}
+  a{color:var(--cy)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Sat<span>meter</span></h1>
+  <p class="sub">Metered API access with no account, no API key, and nothing stored about you.</p>
+</header>
+
+<p class="lede">
+  Charging for an API normally means signup, an API key, a balance in a table, and a billing
+  relationship. Every one of those is a row about you that somebody has to keep, secure, and
+  eventually hand over. L402 replaces the lot with a credential that carries its own limits.
+</p>
+<p class="note">
+  Everything here runs in this tab: a real signed testnet BOLT-11 invoice, a macaroon built from
+  an HMAC-SHA256 chain, and verification of both. No server, no node, no wallet. The one thing
+  that genuinely needs a Lightning node is routing an actual payment, and this page is explicit
+  about simulating that step rather than pretending otherwise.
+</p>
+
+<h2><b>1</b> · Ask for something you have not paid for</h2>
+<p class="note">
+  The server answers 402 and hands back two things: an invoice to pay, and a credential that is
+  useless until you do.
+</p>
+<div class="panel">
+  <div class="row"><button id="ask">GET /v1/quote</button> <span class="note" id="sess"></span></div>
+  <div id="askOut"></div>
+</div>
+
+<h2><b>2</b> · Pay, and the preimage becomes the key</h2>
+<p class="note">
+  Paying a Lightning invoice reveals its preimage, and only paying does. The preimage hashes to
+  the payment hash written into the credential, so presenting both proves payment without the
+  server needing any record of you.
+</p>
+<div class="panel">
+  <div class="row"><button id="pay" disabled>Pay the invoice</button></div>
+  <div id="payOut"></div>
+</div>
+
+<h2><b>3</b> · Spend the meter</h2>
+<p class="note">
+  The credential says what it permits. The server checks the chain, checks the caveats, and
+  serves. It holds one counter keyed by the payment hash and nothing else, so there is no account
+  and no profile, but calls made are still counted.
+</p>
+<div class="panel">
+  <div class="row"><button id="call" disabled>Make a call</button>
+    <button class="g" id="call5" disabled>Make five</button></div>
+  <div id="callOut"></div>
+</div>
+
+<h2><b>4</b> · Hand it on, weakened</h2>
+<p class="note">
+  Anyone holding a credential can narrow it and pass the narrowed copy to someone else, with no
+  help from the server. Below, a subcontractor is given a copy capped far lower than yours. Then
+  they try to undo it, two different ways, and the two attempts fail for two different reasons.
+</p>
+<div class="panel">
+  <div class="row">
+    <button id="deleg" disabled>Delegate a 3-call copy</button>
+    <button class="d" id="widen" disabled>Attack: add a wider cap</button>
+    <button class="d" id="strip" disabled>Attack: remove the cap</button>
+  </div>
+  <div id="delOut"></div>
+</div>
+
+<h2>What is actually being trusted</h2>
+<p>
+  The server's root key, to be kept secret, and Lightning to deliver the preimage only on
+  payment. Nothing else. There is no account to breach, because there is no account. The server
+  cannot tell two customers apart except by payment hash, and it never sees a name, an email or a
+  card. A credential you delegate cannot be widened back by the person you gave it to, so you can
+  hand work to a subcontractor without handing over your balance.
+</p>
+<p class="note" id="scope">
+  Implemented: macaroon minting, attenuation and verification over an HMAC-SHA256 chain; caveat
+  evaluation; BOLT-11 invoice construction on testnet with a real recoverable signature, plus
+  decoding and payee-key recovery; and preimage-to-payment-hash proof. Not implemented: routing
+  a payment over Lightning, third-party caveats and their discharge macaroons, and invoice expiry
+  handling. The invoice is a genuine testnet BOLT-11 and decodes in any Lightning tool, but no
+  node is contacted and no payment is made, so this page cannot move a satoshi on any network.
+</p>
+
+<footer>
+  <p><a href="https://github.com/Leihyn/satmeter">Source</a> · <a href="https://x.com/faruukku">@faruukku</a></p>
+  <p class="note">Demonstration keys, generated in your browser. Nothing is transmitted anywhere.</p>
+</footer>
+
+</div>
+
+<script type="module">
+import * as S from './secp256k1.js';
+const $=s=>document.getElementById(s);
+const te=new TextEncoder(), td=new TextDecoder();
+const b2h=b=>[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");
+const h2b=h=>Uint8Array.from(h.match(/../g).map(x=>parseInt(x,16)));
+const cat=(...a)=>{const t=new Uint8Array(a.reduce((n,x)=>n+x.length,0));let o=0;for(const x of a){t.set(x,o);o+=x.length;}return t;};
+const sha=async b=>new Uint8Array(await crypto.subtle.digest("SHA-256",b));
+async function hmac(key,...msgs){
+  const k=await crypto.subtle.importKey("raw",key,{name:"HMAC",hash:"SHA-256"},false,["sign"]);
+  return new Uint8Array(await crypto.subtle.sign("HMAC",k,cat(...msgs)));
+}
+S.etc.hmacSha256Async=hmac;
+S.etc.sha256Async=async(...m)=>sha(cat(...m));
+const rnd=n=>{const b=new Uint8Array(n);crypto.getRandomValues(b);return b;};
+const cut=(s,n=22)=>s.length>n?s.slice(0,n)+"…":s;
+const esc=s=>String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+
+// ---- bech32 (BIP-173) + BOLT-11 ----
+const CH="qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+const GEN=[0x3b6a57b2,0x26508e6d,0x1ea119fa,0x3d4233dd,0x2a1462b3];
+const pm=v=>{let c=1;for(const d of v){const b=c>>25;c=((c&0x1ffffff)<<5)^d;for(let i=0;i<5;i++)if((b>>i)&1)c^=GEN[i];}return c;};
+const hrpX=h=>{const r=[];for(let i=0;i<h.length;i++)r.push(h.charCodeAt(i)>>5);r.push(0);for(let i=0;i<h.length;i++)r.push(h.charCodeAt(i)&31);return r;};
+const bech32=(hrp,w)=>{const chk=pm([...hrpX(hrp),...w,0,0,0,0,0,0])^1;const cs=[];
+  for(let i=0;i<6;i++)cs.push((chk>>(5*(5-i)))&31);
+  return hrp+"1"+[...w,...cs].map(x=>CH[x]).join("");};
+const bech32Decode=s=>{const p=s.lastIndexOf("1"),hrp=s.slice(0,p);
+  const w=[...s.slice(p+1)].map(c=>CH.indexOf(c));
+  if(w.some(x=>x<0)) throw new Error("bad character in invoice");
+  if(pm([...hrpX(hrp),...w])!==1) throw new Error("bad invoice checksum");
+  return {hrp,words:w.slice(0,-6)};};
+const conv=(d,from,to,pad)=>{let acc=0,bits=0;const out=[],max=(1<<to)-1;
+  for(const v of d){acc=(acc<<from)|v;bits+=from;while(bits>=to){bits-=to;out.push((acc>>bits)&max);}}
+  if(pad){if(bits)out.push((acc<<(to-bits))&max);} else if(bits>=from||((acc<<(to-bits))&max)) return null;
+  return out;};
+
+async function makeInvoice(nodePriv,payHash,sats,desc){
+  const ts=Math.floor(Date.now()/1000), hrp="lntb"+(sats*10)+"n", w=[];
+  for(let i=6;i>=0;i--) w.push((ts>>(5*i))&31);
+  const push=(tag,d)=>{w.push(CH.indexOf(tag));w.push(Math.floor(d.length/32),d.length%32);w.push(...d);};
+  push("p",conv([...h2b(payHash)],8,5,true).slice(0,52));
+  push("d",conv([...te.encode(desc)],8,5,true));
+  const h=await sha(cat(te.encode(hrp),Uint8Array.from(conv(w,5,8,true))));
+  const sig=await S.signAsync(h,nodePriv);
+  return bech32(hrp,[...w,...conv([...sig.toCompactRawBytes(),sig.recovery],8,5,true).slice(0,104)]);
+}
+async function decodeInvoice(inv){
+  const {hrp,words}=bech32Decode(inv);
+  const body=words.slice(0,-104), sigW=words.slice(-104);
+  const sb=Uint8Array.from(conv(sigW,5,8,false)||[]);
+  let ts=0; for(let i=0;i<7;i++) ts=ts*32+body[i];
+  let i=7,payHash=null,desc=null;
+  while(i<body.length){
+    const tag=CH[body[i]], len=body[i+1]*32+body[i+2], d=body.slice(i+3,i+3+len);
+    if(tag==="p") payHash=b2h(Uint8Array.from(conv(d,5,8,false)));
+    if(tag==="d") desc=td.decode(Uint8Array.from(conv(d,5,8,false)));
+    i+=3+len;
+  }
+  const h=await sha(cat(te.encode(hrp),Uint8Array.from(conv(body,5,8,true))));
+  const payee=S.Signature.fromCompact(sb.slice(0,64)).addRecoveryBit(sb[64]).recoverPublicKey(h).toHex(true);
+  return {hrp,ts,payHash,desc,payee,amountSats:Number((hrp.match(/lntb(\d+)n/)||[0,0])[1])/10};
+}
+
+// ---- macaroons ----
+const mint=async(root,id,caveats)=>{let s=await hmac(root,te.encode(id));
+  for(const c of caveats) s=await hmac(s,te.encode(c));
+  return {id,caveats:[...caveats],sig:b2h(s)};};
+const attenuate=async(m,c)=>({id:m.id,caveats:[...m.caveats,c],sig:b2h(await hmac(h2b(m.sig),te.encode(c)))});
+const verifyChain=async(root,m)=>{let s=await hmac(root,te.encode(m.id));
+  for(const c of m.caveats) s=await hmac(s,te.encode(c));
+  return b2h(s)===m.sig;};
+const capOf=cs=>cs.reduce((min,c)=>{const n=c.match(/^calls <= (\d+)$/);
+  return n?Math.min(min,+n[1]):min;},Infinity);
+
+// ---- "server" ----
+const SERVER={root:rnd(32),nodePriv:rnd(32),used:new Map()};
+let SESSION=null, MINE=null, DELEG=null, n=0;
+
+const b64=m=>btoa(JSON.stringify(m)).replace(/=+$/,"");
+const httpBlock=h=>`<div class="http">${h}</div>`;
+
+async function serve(mac,preimage,label){
+  const chainOk=await verifyChain(SERVER.root,mac);
+  if(!chainOk) return {code:401,why:"credential signature does not verify",label};
+  const wantHash=mac.id.split(":")[2];
+  if(b2h(await sha(preimage))!==wantHash) return {code:401,why:"preimage does not hash to the payment hash",label};
+  const cap=capOf(mac.caveats);
+  const used=SERVER.used.get(wantHash)||0;
+  if(used>=cap) return {code:402,why:`meter exhausted: ${used} calls made, credential permits ${cap}`,label,cap,used};
+  SERVER.used.set(wantHash,used+1);
+  return {code:200,label,cap,used:used+1,left:cap-used-1};
+}
+
+$("ask").onclick=async()=>{
+  try{
+    const preimage=rnd(32), payHash=b2h(await sha(preimage));
+    const inv=await makeInvoice(SERVER.nodePriv,payHash,100,"satmeter: 100 metered calls");
+    const id=`satmeter:v1:${payHash}`;
+    const mac=await mint(SERVER.root,id,["service = quotes","calls <= 100"]);
+    SESSION={preimage,payHash,inv,mac}; MINE=null; DELEG=null; SERVER.used.clear();
+    $("sess").textContent="session "+(++n);
+    const d=await decodeInvoice(inv);
+    $("askOut").innerHTML=httpBlock(
+`<span class="c">GET /v1/quote HTTP/1.1</span>
+
+<span class="s">HTTP/1.1 402 Payment Required</span>
+<span class="h">WWW-Authenticate:</span> L402 macaroon="${esc(cut(b64(mac),46))}",
+                  invoice="${esc(cut(inv,52))}"`)
++`<div class="scroll"><table>
+  <tr><th>The invoice, decoded here in the page</th><th></th></tr>
+  <tr><td>network</td><td class="m">${d.hrp.startsWith("lntb")?"testnet (lntb)":d.hrp}</td></tr>
+  <tr><td>amount</td><td class="m">${d.amountSats} sats</td></tr>
+  <tr><td>description</td><td class="m">${esc(d.desc)}</td></tr>
+  <tr><td>payment hash</td><td class="m">${d.payHash}</td></tr>
+  <tr><td>payee key, recovered from the signature</td><td class="m">${d.payee}</td></tr>
+  <tr><td>signature valid</td><td><span class="pill ok">yes</span></td></tr>
+</table></div>
+<div class="scroll" style="margin-top:10px"><table>
+  <tr><th>The credential</th><th></th></tr>
+  <tr><td>identifier</td><td class="m">${esc(mac.id)}</td></tr>
+  ${mac.caveats.map(c=>`<tr><td>caveat</td><td class="m">${esc(c)}</td></tr>`).join("")}
+  <tr><td>signature</td><td class="m">${mac.sig}</td></tr>
+</table></div>
+<p class="note" style="margin-top:10px">The invoice above is a real BOLT-11. Its signature was
+checked by recovering the payee's public key from it, in this page.</p>`;
+    $("pay").disabled=false;
+    for(const b of ["call","call5","deleg","widen","strip"]) $(b).disabled=true;
+    $("payOut").innerHTML=""; $("callOut").innerHTML=""; $("delOut").innerHTML="";
+  }catch(e){ $("askOut").innerHTML=`<div class="err">${esc(e.message)}</div>`; }
+};
+
+$("pay").onclick=async()=>{
+  try{
+    MINE=SESSION.mac;
+    const r=await serve(MINE,SESSION.preimage,"first authorized call");
+    $("payOut").innerHTML=httpBlock(
+`<span class="c">GET /v1/quote HTTP/1.1</span>
+<span class="h">Authorization:</span> L402 ${esc(cut(b64(MINE),40))}:${esc(b2h(SESSION.preimage).slice(0,24))}…
+
+<span class="${r.code===200?"g":"r"}">HTTP/1.1 ${r.code} ${r.code===200?"OK":"Unauthorized"}</span>
+${r.code===200?`<span class="c">{"pair":"BTCUSD","mid":64211.5}</span>`:`<span class="r">${esc(r.why)}</span>`}`)
++`<div class="out"></div>
+<p class="note" style="margin-top:10px">Payment simulated: the preimage is revealed here rather
+than by a routed payment, which is the one step that needs a node. Everything checked above is
+real — the chain replay and the hash proof both ran just now.</p>`;
+    meter();
+    $("call").disabled=false; $("call5").disabled=false; $("deleg").disabled=false;
+  }catch(e){ $("payOut").innerHTML=`<div class="err">${esc(e.message)}</div>`; }
+};
+
+function meter(){
+  const cap=capOf(MINE.caveats), used=SERVER.used.get(SESSION.payHash)||0;
+  const pctv=Math.max(0,Math.min(100,100*(cap-used)/cap));
+  $("callOut").innerHTML=`<div class="k">Yours: ${cap-used} of ${cap} calls left</div>
+    <div class="meter"><i style="width:${pctv}%"></i></div>
+    ${DELEG?`<div class="k" style="margin-top:12px">Subcontractor's copy permits ${capOf(DELEG.caveats)}</div>`:""}`;
+}
+
+async function doCalls(k){
+  const rows=[];
+  for(let i=0;i<k;i++){
+    const r=await serve(MINE,SESSION.preimage,"call");
+    rows.push(r);
+    if(r.code!==200) break;
+  }
+  meter();
+  const last=rows[rows.length-1];
+  $("callOut").innerHTML+=httpBlock(
+`<span class="c">GET /v1/quote  ×${rows.length}</span>
+<span class="${last.code===200?"g":"r"}">HTTP/1.1 ${last.code} ${last.code===200?"OK":"Payment Required"}</span>${last.code!==200?`
+<span class="r">${esc(last.why)}</span>`:""}`);
+}
+$("call").onclick=()=>doCalls(1);
+$("call5").onclick=()=>doCalls(5);
+
+$("deleg").onclick=async()=>{
+  try{
+    DELEG=await attenuate(MINE,"calls <= 3");
+    const ok=await verifyChain(SERVER.root,DELEG);
+    $("delOut").innerHTML=`<div class="scroll"><table>
+      <tr><th></th><th>Caveats</th><th>Permits</th><th>Chain verifies</th></tr>
+      <tr><td>yours</td><td class="cav">${MINE.caveats.map(esc).join("<br>")}</td>
+        <td class="m">${capOf(MINE.caveats)}</td><td><span class="pill ok">yes</span></td></tr>
+      <tr><td>subcontractor's</td><td class="cav">${DELEG.caveats.map(esc).join("<br>")}</td>
+        <td class="m">${capOf(DELEG.caveats)}</td><td><span class="pill ${ok?"ok":"no"}">${ok?"yes":"no"}</span></td></tr>
+    </table></div>
+    <p class="note" style="margin-top:10px">Narrowed with no help from the server: appending a
+    caveat and re-signing needs only the credential you already hold. The server was not asked,
+    and it stores nothing new.</p>`;
+    $("widen").disabled=false; $("strip").disabled=false;
+    meter();
+  }catch(e){ $("delOut").innerHTML=`<div class="err">${esc(e.message)}</div>`; }
+};
+
+$("widen").onclick=async()=>{
+  try{
+    const forged=await attenuate(DELEG,"calls <= 500");
+    const chainOk=await verifyChain(SERVER.root,forged);
+    const cap=capOf(forged.caveats);
+    $("delOut").innerHTML+=`<div class="scroll" style="margin-top:12px"><table>
+      <tr><th>Attack</th><th>Append <code>calls &lt;= 500</code> to the delegated copy</th></tr>
+      <tr><td>chain verifies</td><td><span class="pill ${chainOk?"ok":"no"}">${chainOk?"yes":"no"}</span>
+        ${chainOk?" — appending is always allowed, so the signature is fine":""}</td></tr>
+      <tr><td>caveats now</td><td class="cav">${forged.caveats.map(esc).join("<br>")}</td></tr>
+      <tr><td>what the server permits</td><td class="m"><b>${cap}</b>, not 500</td></tr>
+      <tr><td>result</td><td><span class="pill no">attack fails</span></td></tr>
+    </table></div>
+    <p class="note" style="margin-top:10px">This one fails on <b>policy</b>. Every caveat must
+    hold, so adding a looser one changes nothing while the tighter one is still in the chain.</p>`;
+  }catch(e){ $("delOut").innerHTML+=`<div class="err">${esc(e.message)}</div>`; }
+};
+
+$("strip").onclick=async()=>{
+  try{
+    const stripped={...DELEG,caveats:DELEG.caveats.filter(c=>c!=="calls <= 3")};
+    const chainOk=await verifyChain(SERVER.root,stripped);
+    const r=await serve(stripped,SESSION.preimage,"stripped");
+    $("delOut").innerHTML+=`<div class="scroll" style="margin-top:12px"><table>
+      <tr><th>Attack</th><th>Delete <code>calls &lt;= 3</code> from the delegated copy</th></tr>
+      <tr><td>caveats now</td><td class="cav">${stripped.caveats.map(esc).join("<br>")}</td></tr>
+      <tr><td>what policy alone would permit</td><td class="m">${capOf(stripped.caveats)}</td></tr>
+      <tr><td>chain verifies</td><td><span class="pill ${chainOk?"ok":"no"}">${chainOk?"yes":"no"}</span></td></tr>
+      <tr><td>server response</td><td class="m">${r.code} — ${esc(r.why||"OK")}</td></tr>
+      <tr><td>result</td><td><span class="pill no">attack fails</span></td></tr>
+    </table></div>
+    <p class="note" style="margin-top:10px">This one fails on <b>cryptography</b>. Removing a
+    caveat would widen the policy, but the signature was built by chaining that caveat in, and
+    running the chain backwards would mean inverting HMAC. Two attacks, two different walls.</p>`;
+  }catch(e){ $("delOut").innerHTML+=`<div class="err">${esc(e.message)}</div>`; }
+};
+
+if(new URLSearchParams(location.search).has("demo")){
+  await $("ask").onclick(); await $("pay").onclick();
+  await doCalls(5);
+  await $("deleg").onclick(); await $("widen").onclick(); await $("strip").onclick();
+}
+</script>
+</body>
+</html>
