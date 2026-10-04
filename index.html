@@ -73,6 +73,12 @@
   .scroll{overflow-x:auto}
   footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--line);color:var(--mut);font-size:13.5px}
   a{color:var(--cy)}
+  .inv{width:100%;min-height:86px;resize:vertical;font:12.5px/1.6 ui-monospace,Menlo,monospace;
+    color:var(--ink);background:#070910;border:1px solid var(--line);border-radius:7px;padding:11px 12px;
+    word-break:break-all;margin:6px 0 10px}
+  .inv:focus{outline:1px solid var(--volt)}
+  .chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+  .chips button{font-size:12px;padding:5px 11px}
 </style>
 </head>
 <body>
@@ -88,6 +94,26 @@
   relationship. Every one of those is a row about you that somebody has to keep, secure, and
   eventually hand over. L402 replaces the lot with a credential that carries its own limits.
 </p>
+<h2>decode <b>&lt;any lightning invoice&gt;</b></h2>
+<p class="note">
+  Paste any BOLT-11 invoice, mainnet or testnet, from any wallet or node. It is decoded and its
+  signature is checked right here, so you can see who you would be paying, how much, for what,
+  and until when, before you pay it.
+</p>
+<div class="panel">
+  <textarea class="inv" id="invIn" spellcheck="false" autocomplete="off" placeholder="lnbc… or lntb…"></textarea>
+  <div class="row"><button id="invGo">Decode</button></div>
+  <div class="chips">
+    <button class="g" data-ex="coffee">$3 coffee, mainnet</button>
+    <button class="g" data-ex="donation">Donation, any amount</button>
+    <button class="g" data-ex="testnet">Testnet, with fallback address</button>
+    <button class="d" data-ex="broken">Corrupted checksum</button>
+    <button class="g" id="invOwn">This page's own invoice</button>
+  </div>
+  <p class="note" style="margin-top:8px">Examples are the test vectors from the Lightning specification.</p>
+  <div id="invOut"></div>
+</div>
+
 <p class="note">
   Everything here runs in this tab: a real signed testnet BOLT-11 invoice, a macaroon built from
   an HMAC-SHA256 chain, and verification of both. No server, no node, no wallet. The one thing
@@ -153,8 +179,9 @@
 </p>
 <p class="note" id="scope">
   Implemented: macaroon minting, attenuation and verification over an HMAC-SHA256 chain; caveat
-  evaluation; BOLT-11 invoice construction on testnet with a real recoverable signature, plus
-  decoding and payee-key recovery; and preimage-to-payment-hash proof. Not implemented: routing
+  evaluation; BOLT-11 invoice construction on testnet with a real recoverable signature; a full BOLT-11
+  decoder for any mainnet or testnet invoice, checked against every test vector in the
+  specification; and preimage-to-payment-hash proof. Not implemented: routing
   a payment over Lightning, third-party caveats and their discharge macaroons, and invoice expiry
   handling. The invoice is a genuine testnet BOLT-11 and decodes in any Lightning tool, but no
   node is contacted and no payment is made, so this page cannot move a satoshi on any network.
@@ -169,6 +196,7 @@
 
 <script type="module">
 import * as S from './secp256k1.js';
+import { decode as decodeAny } from './bolt11.js';
 const $=s=>document.getElementById(s);
 const te=new TextEncoder(), td=new TextDecoder();
 const b2h=b=>[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");
@@ -184,6 +212,49 @@ S.etc.sha256Async=async(...m)=>sha(cat(...m));
 const rnd=n=>{const b=new Uint8Array(n);crypto.getRandomValues(b);return b;};
 const cut=(s,n=22)=>s.length>n?s.slice(0,n)+"…":s;
 const esc=s=>String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+
+// ---- decode any invoice ----
+const EXAMPLES = {"coffee": "lnbc2500u1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdq5xysxxatsyp3k7enxv4jsxqzpu9qrsgquk0rl77nj30yxdy8j9vdx85fkpmdla2087ne0xh8nhedh8w27kyke0lp53ut353s06fv3qfegext0eh0ymjpf39tuven09sam30g4vgpfna3rh", "donation": "lnbc1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdpl2pkx2ctnv5sxxmmwwd5kgetjypeh2ursdae8g6twvus8g6rfwvs8qun0dfjkxaq9qrsgq357wnc5r2ueh7ck6q93dj32dlqnls087fxdwk8qakdyafkq3yap9us6v52vjjsrvywa6rt52cm9r9zqt8r2t7mlcwspyetp5h2tztugp9lfyql", "testnet": "lntb20m1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygshp58yjmdan79s6qqdhdzgynm4zwqd5d7xmw5fk98klysy043l2ahrqspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqfpp3x9et2e20v6pu37c5d9vax37wxq72un989qrsgqdj545axuxtnfemtpwkc45hx9d2ft7x04mt8q7y6t0k2dge9e7h8kpy9p34ytyslj3yu569aalz2xdk8xkd7ltxqld94u8h2esmsmacgpghe9k8", "broken": "lnbc2500u1pvjluezpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdpquwpc4curk03c9wlrswe78q4eyqc7d8d0xqzpuyk0sg5g70me25alkluzd2x62aysf2pyy8edtjeevuv4p2d5p76r4zkmneet7uvyakky2zr4cusd45tftc9c5fh0nnqpnl2jfll544esqchsrnt"};
+const fmtMsat = (m) => {
+  if (m === null) return "no amount set; the payer chooses";
+  const sats = m / 1000n, rem = m % 1000n;
+  const btc = (Number(m) / 1e11).toFixed(11).replace(/0+$/, "").replace(/\.$/, "");
+  return `${sats.toLocaleString()}${rem ? "." + rem.toString().padStart(3, "0") : ""} sats (${btc} BTC)`;
+};
+const when = (t) => new Date(t * 1000).toISOString().replace("T", " ").slice(0, 16) + " UTC";
+async function showInvoice(text) {
+  const out = $("invOut");
+  try {
+    const d = await decodeAny(text);
+    const now = Math.floor(Date.now() / 1000);
+    const expired = now > d.expiresAt;
+    const row = (k, v) => `<tr><td>${k}</td><td class="m">${v}</td></tr>`;
+    out.innerHTML = `<div class="scroll" style="margin-top:12px"><table>
+      ${row("network", d.network + " (" + esc(d.prefix) + ")")}
+      ${row("amount", fmtMsat(d.amountMsat))}
+      ${row(d.description !== null ? "description" : "description hash", d.description !== null ? esc(d.description) || "(empty)" : esc(d.descriptionHash || "none"))}
+      ${row("pay to node", esc(d.payee) + (d.payeeStated ? "" : " <span class=\"note\">(recovered from the signature)</span>"))}
+      ${row("signature", '<span class="pill ok">valid</span> ' + esc(d.signatureCheck))}
+      ${row("created", when(d.timestamp))}
+      ${row("expires", when(d.expiresAt) + " " + (expired ? '<span class="pill no">expired</span>' : '<span class="pill ok">still payable</span>'))}
+      ${row("payment hash", esc(d.paymentHash))}
+      ${row("route hints", d.routeHops ? d.routeHops + " hop" + (d.routeHops > 1 ? "s" : "") : "none")}
+      ${row("on-chain fallback", d.fallback || "none")}
+      ${row("feature bits", d.features.length ? d.features.join(", ") : "none")}
+      ${row("final CLTV delta", d.minFinalCltv + " blocks")}
+    </table></div>`;
+  } catch (e) {
+    out.innerHTML = `<div class="err">Not a valid invoice: ${esc(e.message)}</div>`;
+  }
+}
+$("invGo").onclick = () => showInvoice($("invIn").value);
+$("invOwn").onclick = async () => {
+  if (!SESSION) await $("ask").onclick();   // mint one by running step 1 below
+  $("invIn").value = SESSION.inv; showInvoice(SESSION.inv);
+};
+document.querySelectorAll("[data-ex]").forEach((b) => b.onclick = () => {
+  $("invIn").value = EXAMPLES[b.dataset.ex]; showInvoice(EXAMPLES[b.dataset.ex]);
+});
 
 // ---- bech32 (BIP-173) + BOLT-11 ----
 const CH="qpzry9x8gf2tvdw0s3jn54khce6mua7l";
@@ -207,8 +278,10 @@ async function makeInvoice(nodePriv,payHash,sats,desc){
   const ts=Math.floor(Date.now()/1000), hrp="lntb"+(sats*10)+"n", w=[];
   for(let i=6;i>=0;i--) w.push((ts>>(5*i))&31);
   const push=(tag,d)=>{w.push(CH.indexOf(tag));w.push(Math.floor(d.length/32),d.length%32);w.push(...d);};
+  push("s",conv([...rnd(32)],8,5,true).slice(0,52));   // payment secret, required by BOLT-11
   push("p",conv([...h2b(payHash)],8,5,true).slice(0,52));
   push("d",conv([...te.encode(desc)],8,5,true));
+  push("9",[16,8,0]);                                    // features: var_onion_optin (8), payment_secret (14)
   const h=await sha(cat(te.encode(hrp),Uint8Array.from(conv(w,5,8,true))));
   const sig=await S.signAsync(h,nodePriv);
   return bech32(hrp,[...w,...conv([...sig.toCompactRawBytes(),sig.recovery],8,5,true).slice(0,104)]);
